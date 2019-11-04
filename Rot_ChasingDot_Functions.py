@@ -23,8 +23,7 @@ def find_files(exp_path):
     return cam_file, stim_file, bout_file, filename
 
 
-def read_stimlog(stimfile):
-    print('Reading stimlog...')
+def read_stimlog(stimfile, shortened=False):
     stimlog_dict = loadmat(stimfile)['StimLog']  # load mat file as numpy array
     n = []
     for i in np.arange(6):
@@ -32,6 +31,8 @@ def read_stimlog(stimfile):
     stimlog_df = pd.DataFrame(n).T  # creates dataframe from our list of values, transposes it
     stimlog_df.columns = np.concatenate(stimlog_dict[0][0][1][0]).tolist()  # take array of variable names and assign it to dataframe columns
     stimlog_df.rename(columns={'frameID' : 'Id', 'xPos' : 'xPosDot', 'yPos' : 'yPosDot'}, inplace=True)  # rename columns to prep for merging
+    if shortened == True:
+        stimlog_df = stimlog_df.drop(['iGlobalTime', 'iTimeDelta'], axis=1)  # we don't need these columns anymore
     return stimlog_df
 
 
@@ -44,4 +45,13 @@ def return_as_df(boutmat, keys):
     return df
 
 
+def add_trial_number(df):
+    df['diff'] = np.abs(df['xPosDot'].diff())  # find where dot position changes from -100 (not shown) to displayed
+    df_filtered = df[df['diff'] > 20.0]  # returns rows of condition changes
+    trials = pd.DataFrame(np.concatenate((np.array([0]), df_filtered.index.values)), columns=['index'])  # creates temp dataframe with indices of condition changes
+    trials['Trial'] = np.arange(len(trials))  # adds column with trial number
+    trials.set_index('index', inplace=True)  # sets this as index to merge with df later
+    df_trials = df.join(trials).drop(['diff'], axis=1)  # merges trial temp with dataframe
+    df_trials.Trial = df_trials.Trial.fillna(method='pad')  # fills in missing conditions by forward fill
+    return df_trials
 

@@ -36,6 +36,26 @@ def read_stimlog(stimfile, shortened=False):
     return stimlog_df
 
 
+def global_trimming(camlog, stimlog):
+    ''' Get rid of all NaNs in datasets '''
+    camlog = camlog.dropna()
+    stimlog = stimlog.dropna(subset=['Id'])
+    ''' Trim beginning to synchronise starts based on Id '''
+    stim_st_id = stimlog.loc[0, 'Id']
+    cam_st_id = camlog.loc[0, 'Id']
+    if stim_st_id >= cam_st_id:
+        # trim camlog
+        camlog = camlog[(camlog.Id == stim_st_id).idxmax():].reset_index().drop('index', axis=1)
+    else:
+        # trim stimlog
+        stimlog = stimlog[(stimlog.Id == cam_st_id).idxmax():].reset_index().drop('index', axis=1)
+    ''' Trim end to synchronise ends based on Id of Stim '''
+    cam_ed_id = round(camlog.iloc[-1, 0], -1)
+    camlog = camlog[:(camlog.Id == cam_ed_id).idxmax()]
+    stimlog = stimlog[:(stimlog.Id == cam_ed_id).idxmax()]
+    return camlog, stimlog
+
+
 def return_as_df(boutmat, keys):
     ''' Boutmat is the original dictionary, keys is a list of keys you want to have included in the new dataframe. '''
     dict2 = {x: boutmat[x] for x in keys}

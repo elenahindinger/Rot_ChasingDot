@@ -75,3 +75,12 @@ def add_trial_number(df):
     df_trials.Trial = df_trials.Trial.fillna(method='pad')  # fills in missing conditions by forward fill
     return df_trials
 
+
+def bouts_to_camlog(dft, camlog):
+    ''' Returns an array containing bout types true with time that can then be added to camlog '''
+    id_st = dft['allboutstarts'].values - int(camlog.iloc[0, 0])
+    id_ed = dft['allboutends'].values - int(camlog.iloc[0, 0])
+    tail_cat = np.zeros(camlog.shape[0]) - 1
+    for i, val in enumerate(id_st):
+        tail_cat[id_st[i]:id_ed[i]] = dft['boutCat'][i]
+    return tail_cat

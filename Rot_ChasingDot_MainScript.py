@@ -7,6 +7,7 @@ from matplotlib import pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
 from scipy.io import loadmat
+import itertools as it
 from Rot_ChasingDot_Functions import *
 
 ''' Parameters to calculate at start of every bout classification script '''
@@ -36,6 +37,8 @@ camlog_og = pd.DataFrame(loadmat(camfile)['A'], columns=['Id', 'xPos', 'yPos', '
 stimlog_og = read_stimlog(stimfile, shortened=True)  # read stimlog
 camlog, stimlog = global_trimming(camlog_og, stimlog_og)
 boutmat = loadmat(boutfile)  # load bout mat file
+setup = 'atlas' if 'atlas' in filename.lower() else 'c3po'
+stimlog = stim_shader_to_camera_space(stimlog, setup=setup)
 
 ''' Dealing with boutmat '''
 Bouts = return_as_df(boutmat, keys=['allboutstarts', 'allboutends', 'rejectedBouts'])  # bout start, end, classified Y/N
@@ -59,6 +62,7 @@ BoutsWithCat['Id'] = BoutsWithCat.allboutstarts  # create a dummy column Id to m
 df = pd.merge(BoutsWithCat, stimlog, on='Id')  # merge BoutsWithCat with stimlog
 dft = add_trial_number(df)  # this function returns a new dataframe with trial number added, where 0 is habituation. You can do a lot of computation from this point onwards.
 
+
 ''' Mapping bouts onto camlog '''
 tail_cat = bouts_to_camlog(dft, camlog)  # creates an array of bouts that is true for time and duration
 camlog['tail_cat'] = tail_cat  # adds this array to camera log
@@ -81,4 +85,18 @@ bout_count_all.plot(kind='bar', stacked=True, color=[colour_dict.get(x, 'white')
 # May become interesting for simpler plots
 # dft['IBI'] = dft.allboutstarts.shift(-1) - dft.allboutends
 # bout_count_temp = dft.groupby('Trial')['IBI'].value_counts().unstack().fillna(0).rename_axis(index=None, columns=None)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

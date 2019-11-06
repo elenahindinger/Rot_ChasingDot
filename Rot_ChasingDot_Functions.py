@@ -6,6 +6,7 @@ import os
 from matplotlib import pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
+import itertools as it
 from scipy.io import loadmat
 
 
@@ -63,6 +64,23 @@ def return_as_df(boutmat, keys):
         dict2[key] = val.flatten()
     df = pd.DataFrame.from_dict(dict2)
     return df
+
+
+def stim_shader_to_camera_space(stimlog, setup):
+    if setup == 'atlas':
+        M = np.array([489.8566, 0.5522, -0.5522, 489.8566]).reshape(2, 2)
+        C = np.array([474.6911, 473.1050])
+    elif setup == 'c3po':
+        M = np.array([486.1282, 2.5560, -2.5560, 486.1282]).reshape(2, 2)
+        C = np.array([469.7695, 468.0829])
+    else:
+        print('Please indicate which set-up this experiment was recorded on.')
+
+    all_dot_pos =np.stack((stimlog.xPosDot.values, stimlog.yPosDot.values), axis=-1)
+    r = np.dot(all_dot_pos, M) + C
+    stimlog['xPosDotCamSpace'] = r[:, 0::2].flatten()
+    stimlog['yPosDotCamSpace'] = 948.0-(r[:, 1::2].flatten())
+    return stimlog
 
 
 def add_trial_number(df):

@@ -22,6 +22,7 @@ colour_dict = {'AS': 'skyblue', 'Slow1': 'royalblue', 'Slow2': 'darkblue', 'Shor
 
 ''' Reading files '''
 exp_path = r'F:\Rotations\ExperimentalData\2019_10_24\20191024_experimental_Trial1_f2_Tu_4275ix_6dpf_Atlas_75_P2_chasingdot'  # CHANGE HERE TO LOOK AT A DIFFERENT FISH
+save_path = r'F:\Rotations\Analysis'
 
 print('Reading files...')
 camfile, stimfile, boutfile, filename = find_files(exp_path=exp_path)  # finds correct file names based on experiment folder given above
@@ -35,10 +36,15 @@ camlog_og = pd.DataFrame(loadmat(camfile)['A'], columns=['Id', 'xPos', 'yPos', '
                                                       'TailAngles9', 'TailAngles10', 'FirstorNot', 'TrackEye',
                                                       'TimerAcq', 'lag'])  # read camlog
 stimlog_og = read_stimlog(stimfile, shortened=True)  # read stimlog
-camlog, stimlog = global_trimming(camlog_og, stimlog_og)
+camlog, stimlog = global_trimming(camlog_og, stimlog_og)  # trim before and after synch of camlog and stimlog
 boutmat = loadmat(boutfile)  # load bout mat file
+
+''' Some transformations in camlog and stimlog '''
 setup = 'atlas' if 'atlas' in filename.lower() else 'c3po'
-stimlog = stim_shader_to_camera_space(stimlog, setup=setup)
+stimlog = stim_shader_to_camera_space(dataframe=stimlog, setup=setup)  # transform stimlog to camera space
+stimlog = img_to_cart(dataframe=stimlog, xPos_og='xPosDotCamSpace', yPos_og='yPosDotCamSpace', xPos_new='xPosCartDot',
+                      yPos_new='yPosCartDot')  # from camera coordinates to cartesian
+camlog = img_to_cart(dataframe=camlog, xPos_og='xPos', yPos_og='yPos', xPos_new='xPosCart', yPos_new='yPosCart')
 
 ''' Dealing with boutmat '''
 Bouts = return_as_df(boutmat, keys=['allboutstarts', 'allboutends', 'rejectedBouts'])  # bout start, end, classified Y/N
@@ -48,15 +54,15 @@ DistToCenter = return_as_df(boutmat, keys=['distToCenter'])  # distance to centr
 BodyAngles = return_as_df(boutmat, keys=['realBodyAngles'])  # body angles unwrapped
 BoutSegMeth = return_as_df(boutmat, keys=['smootherTailCurveMeasure'])  # method of bout segmentation
 # KinPar = return_as_df(boutmat, keys=['BoutKinematicParameters']) NOT DEALT WITH YET, NEXT VERSION
-# NewScore = return_as_df(boutmat, keys=['newScore'])
-# TailAngles = return_as_df(boutmat, keys=['smoothedCumsumInterpFixedSegmentAngles'])
+# NewScore = return_as_df(boutmat, keys=['newScore']) NOT DEALT WITH YET, NEXT VERSION
+# TailAngles = return_as_df(boutmat, keys=['smoothedCumsumInterpFixedSegmentAngles']) NOT DEALT WITH YET, NEXT VERSION
 
 # clean up Bouts to delete unclassified bouts
 UnclassifiedBoutIndices = Bouts[Bouts['rejectedBouts'] == 1].index  # Get indices for which column rejected Bouts is 1
 Bouts = Bouts.drop(UnclassifiedBoutIndices).reset_index().drop(['rejectedBouts', 'index'], axis=1)  # Delete these rows
 
-''' Merge bout start, bout end, bout type with stimulus '''
 
+''' Merge bout start, bout end, bout type with stimulus '''
 BoutsWithCat = pd.concat([Bouts, BoutCat], axis=1)  # merge bouts with classification
 BoutsWithCat['Id'] = BoutsWithCat.allboutstarts  # create a dummy column Id to merge with stim afterwards
 df = pd.merge(BoutsWithCat, stimlog, on='Id')  # merge BoutsWithCat with stimlog
@@ -67,33 +73,71 @@ dft = add_trial_number(df)  # this function returns a new dataframe with trial n
 tail_cat = bouts_to_camlog(dft, camlog)  # creates an array of bouts that is true for time and duration
 camlog['tail_cat'] = tail_cat  # adds this array to camera log
 exp = camlog.merge(stimlog, on='Id', how='left')  # merge camera log and stimlog
-exp[['xPosDot', 'yPosDot']] = exp[['xPosDot', 'yPosDot']].fillna(method='ffill')  # forward fill to pad out all rows with a dot position
+exp[['xPosCartDot', 'yPosCartDot']] = exp[['xPosCartDot', 'yPosCartDot']].fillna(method='ffill')  # forward fill to pad out all rows with a dot position
 exp['StopWatchTime'] = exp['StopWatchTime'].interpolate()  # interpolate time
 
 
+''' Trajectory '''
+plot_trajectory(camlog, 'xPosCart', 'yPosCart', os.path.join(save_path, (filename + '_trajectory.tiff')))
+
+
 ''' Calculate number of bouts per category per stimulus condition '''
-
 bout_count_temp = dft.groupby('Trial')['boutCat'].value_counts().unstack().fillna(0).rename_axis(index=None, columns=None)
-bout_count_all = pd.DataFrame(np.zeros(shape=(41,13)), columns=np.arange(1, 14))  # create empty dataframe with all bout categories
-bout_count_all.update(bout_count_temp)  # map actual bouts observed onto empty dataframe, this helps with plotting
-bout_count_all.columns = unordered_bouts  # rename columns to bout type names
-bout_count_all = bout_count_all[ordered_bouts]  # reorder dataframe to plot in correct order
+bca = pd.DataFrame(np.zeros(shape=(41,13)), columns=np.arange(1, 14))  # create empty dataframe with all bout categories
+bca.update(bout_count_temp)  # map actual bouts observed onto empty dataframe, this helps with plotting
+bca.columns = unordered_bouts  # rename columns to bout type names
+bca = bca[ordered_bouts]  # reorder dataframe to plot in correct order
 
-bout_count_all.plot(kind='bar', stacked=True, color=[colour_dict.get(x, 'white') for x in bout_count_all.columns])
+# # normalisation
+# ibi_stats_all.iloc[0, :] = ibi_stats_all.iloc[0, :] / 600.0
+# ibi_stats_all.iloc[1::2, :] = ibi_stats_all.iloc[1::2, :] / 30.0
+# ibi_stats_all.iloc[2::2, :] = ibi_stats_all.iloc[2::2, :] / 120.0
 
-# ''' Interbout interval '''
+bca_norm = bca.div(bca.sum(axis=1), axis=0)*100
+
+
+fig, ax = plt.subplots(1, 1, figsize=(20, 15))
+ax = bca.plot(kind='bar', stacked=True,
+              color=[colour_dict.get(x, 'white') for x in bca.columns], ax=ax,  rot=0)
+plt.xticks(np.arange(1, 41, 2), np.arange(1, 21))
+ax.set_xlabel('Trial Number', fontsize=20, labelpad=20)
+ax.set_ylabel('Frequency of Bout Type', fontsize=20, labelpad=20)
+lg = ax.legend(loc=5, bbox_to_anchor=(1.15, 0.5), title='Bout Type', fontsize='x-large')
+fig.savefig(os.path.join(save_path, (filename + '_boutfreq.tiff')), bbox_inches='tight', format='tiff')
+plt.close('all')
+
+''' Interbout interval '''
 # May become interesting for simpler plots
-# dft['IBI'] = dft.allboutstarts.shift(-1) - dft.allboutends
-# bout_count_temp = dft.groupby('Trial')['IBI'].value_counts().unstack().fillna(0).rename_axis(index=None, columns=None)
+dft['IBI'] = dft.allboutstarts.shift(-1) - dft.allboutends
+ibi_stats = dft.groupby('Trial')['IBI'].describe()
+ibi_stats_all = pd.DataFrame(np.zeros(shape=(41,8)), columns=ibi_stats.columns)  # create empty dataframe with all bout categories
+ibi_stats_all.update(ibi_stats)  # map actual bouts observed onto empty dataframe, this helps with plotting
+ibi_stats_all.iloc[:, 1:] = ibi_stats_all.iloc[:, 1:] / 700  # converts from frames to seconds
+
+# normalisation
+ibi_stats_all.iloc[0 , :] = ibi_stats_all.iloc[0, :] / 600.0
+ibi_stats_all.iloc[1::2,:] = ibi_stats_all.iloc[1::2,:] / 30.0
+ibi_stats_all.iloc[2::2,:] = ibi_stats_all.iloc[2::2,:] / 120.0
 
 
+fig, ax = plt.subplots(1, 1)
+ax = sns.barplot(x='index', y="mean", data=ibi_stats_all.reset_index(), ax=ax)
+plt.xticks(np.arange(1, 41, 2), np.arange(1, 21))
+ax.set_xlabel('Trial Number', fontsize=20, labelpad=20)
+ax.set_ylabel('Mean Interbout Interval (seconds)', fontsize=20, labelpad=20)
 
+''' IBI per hab, trial, break distribution plots '''
+dft['IBI'] = dft.IBI / 700
+hab = dft.groupby('Trial').get_group(0.0)
+trials = dft.loc[dft['Trial'].isin(np.arange(1, 41, 2))]
+breaks = dft.loc[dft['Trial'].isin(np.arange(2, 41, 2))]
+breaks = breaks.replace(np.nan, 0.0)
 
+sns.distplot(hab.IBI, bins=40, rug=True)
+sns.distplot(trials.IBI, bins=40, rug=True)
+sns.distplot(breaks.IBI, bins=40, rug=True)
 
-
-
-
-
+plt.hist(hab.IBI, bins=40)
 
 
 

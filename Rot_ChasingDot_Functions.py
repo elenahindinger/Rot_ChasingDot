@@ -66,7 +66,16 @@ def return_as_df(boutmat, keys):
     return df
 
 
-def stim_shader_to_camera_space(stimlog, setup):
+def img_to_cart(dataframe, xPos_og, yPos_og, xPos_new, yPos_new):
+    df = dataframe.copy()
+    df[xPos_new] = df[yPos_og]  # transform X image to X cartesian
+    df[yPos_new] = 948 - df[xPos_og]  # transform Y image to Y cartesian
+    df = df.drop([xPos_og, yPos_og], axis=1)
+    return df
+
+
+def stim_shader_to_camera_space(dataframe, setup):
+    df = dataframe.copy()
     if setup == 'atlas':
         M = np.array([489.8566, 0.5522, -0.5522, 489.8566]).reshape(2, 2)
         C = np.array([474.6911, 473.1050])
@@ -76,16 +85,17 @@ def stim_shader_to_camera_space(stimlog, setup):
     else:
         print('Please indicate which set-up this experiment was recorded on.')
 
-    all_dot_pos =np.stack((stimlog.xPosDot.values, stimlog.yPosDot.values), axis=-1)
+    all_dot_pos =np.stack((df.xPosDot.values, df.yPosDot.values), axis=-1)
     r = np.dot(all_dot_pos, M) + C
-    stimlog['xPosDotCamSpace'] = r[:, 0::2].flatten()
-    stimlog['yPosDotCamSpace'] = 948.0-(r[:, 1::2].flatten())
-    return stimlog
+    df['xPosDotCamSpace'] = r[:, 0::2].flatten()
+    df['yPosDotCamSpace'] = 948.0-(r[:, 1::2].flatten())
+    df = df.drop(['xPosDot', 'yPosDot'], axis=1)
+    return df
 
 
 def add_trial_number(df):
-    df['diff'] = np.abs(df['xPosDot'].diff())  # find where dot position changes from -100 (not shown) to displayed
-    df_filtered = df[df['diff'] > 20.0]  # returns rows of condition changes
+    df['diff'] = np.abs(df['xPosCartDot'].diff())  # find where dot position changes from -100 (not shown) to displayed
+    df_filtered = df[df['diff'] > 10000.0]  # returns rows of condition changes
     trials = pd.DataFrame(np.concatenate((np.array([0]), df_filtered.index.values)), columns=['index'])  # creates temp dataframe with indices of condition changes
     trials['Trial'] = np.arange(len(trials))  # adds column with trial number
     trials.set_index('index', inplace=True)  # sets this as index to merge with df later
@@ -102,3 +112,13 @@ def bouts_to_camlog(dft, camlog):
     for i, val in enumerate(id_st):
         tail_cat[id_st[i]:id_ed[i]] = dft['boutCat'][i]
     return tail_cat
+
+
+def plot_trajectory(df, xPos, yPos, new_filename):
+    mpl.rcParams['agg.path.chunksize'] = 10000
+    fig, axes = plt.subplots(1, 1, figsize=(10, 10))
+    axes.plot(df[xPos], df[yPos])
+    axes.set(xlim=(0, 950), ylim=(0, 950))
+    plt.tight_layout()
+    fig.savefig(new_filename, bbox_inches='tight', format='tiff')
+    plt.close('all')

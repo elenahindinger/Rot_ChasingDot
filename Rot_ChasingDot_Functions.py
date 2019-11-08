@@ -8,6 +8,7 @@ import matplotlib as mpl
 import seaborn as sns
 import itertools as it
 from scipy.io import loadmat
+from math import sqrt
 
 
 def find_files(exp_path):
@@ -114,11 +115,17 @@ def bouts_to_camlog(dft, camlog):
     return tail_cat
 
 
-def plot_trajectory(df, xPos, yPos, new_filename):
-    mpl.rcParams['agg.path.chunksize'] = 10000
-    fig, axes = plt.subplots(1, 1, figsize=(10, 10))
-    axes.plot(df[xPos], df[yPos])
-    axes.set(xlim=(0, 950), ylim=(0, 950))
-    plt.tight_layout()
-    fig.savefig(new_filename, bbox_inches='tight', format='tiff')
-    plt.close('all')
+def calc_dist(x1, x2, y1, y2):
+    dist = sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2))
+    return dist
+
+
+def distance(df, px_per_mm=75):
+    temp = pd.concat([df.xPosCart, df.xPosCart.shift(fill_value=df.loc[0, 'xPosCart']), df.yPosCart,
+                     df.yPosCart.shift(fill_value=df.loc[0, 'yPosCart'])], axis=1)
+    temp.columns = ['xPos', 'xPos2', 'yPos', 'yPos2']
+    dist_px = temp.apply(lambda row: calc_dist(row[0], row[1], row[2], row[3]), axis=1)
+    dist_mm = dist_px * px_per_mm / 1000
+    return dist_mm
+
+

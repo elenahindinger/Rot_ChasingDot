@@ -46,16 +46,20 @@ for date_folder in os.listdir(big_folder):
                                                               'TailAngles9', 'TailAngles10', 'FirstorNot', 'TrackEye',
                                                               'TimerAcq', 'lag'])  # read camlog
         stimlog_og = read_stimlog(stimfile, shortened=True)  # read stimlog
-        camlog, stimlog = global_trimming(camlog_og, stimlog_og)  # trim before and after synch of camlog and stimlog
         boutmat = loadmat(boutfile)  # load bout mat file
 
         ''' Some transformations in camlog and stimlog '''
-        print('Transforming camlog and stimlog...')
+        camlog_st, stimlog_st = trim_start(camlog_og, stimlog_og)  # trim before and after synch of camlog and stimlog
+        camlog_ed, stimlog_ed = trim_end(camlog_st, stimlog_st)
+        ### ADD TRIMMING END FUNCTION HERE
         setup = 'atlas' if 'atlas' in filename.lower() else 'c3po'
-        stimlog = stim_shader_to_camera_space(dataframe=stimlog, setup=setup)  # transform stimlog to camera space
-        stimlog = img_to_cart(dataframe=stimlog, xPos_og='xPosDotCamSpace', yPos_og='yPosDotCamSpace', xPos_new='xPosCartDot',
+        stimlog_camspace = stim_shader_to_camera_space(dataframe=stimlog_ed,
+                                                       setup=setup)  # transform stimlog to camera space
+        stimlog = img_to_cart(dataframe=stimlog_camspace, xPos_og='xPosDotCamSpace', yPos_og='yPosDotCamSpace',
+                              xPos_new='xPosCartDot',
                               yPos_new='yPosCartDot')  # from camera coordinates to cartesian
-        camlog = img_to_cart(dataframe=camlog, xPos_og='xPos', yPos_og='yPos', xPos_new='xPosCart', yPos_new='yPosCart')
+        camlog = img_to_cart(dataframe=camlog_ed, xPos_og='xPos', yPos_og='yPos', xPos_new='xPosCart',
+                             yPos_new='yPosCart')
 
         ''' Dealing with boutmat '''
         print('Dealing with boutmat...')
@@ -121,3 +125,6 @@ for date_folder in os.listdir(big_folder):
 
         ''' PLOT 5 '''
         plot_bouts_per_condition(bca, new_filename=os.path.join(save_path, (filename + '_total_bout_count.tiff')), colour_dict=colour_dict)
+
+        ''' PLOT 6 IBI per hab, trial, break distribution plots '''
+        plot_IBI(dft, new_filename=os.path.join(save_path, (filename + '_IBI.tiff')))

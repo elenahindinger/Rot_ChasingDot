@@ -10,6 +10,7 @@ import itertools as it
 from scipy.io import loadmat
 from Rot_ChasingDot_Functions import *
 
+
 def plot_trajectory(df, xPos, yPos, new_filename):
     mpl.rcParams['agg.path.chunksize'] = 10000
     fig, axes = plt.subplots(1, 1, figsize=(10, 10))
@@ -87,3 +88,23 @@ def plot_bouts_per_condition(bca, new_filename, colour_dict):
     plt.tight_layout()
     fig.savefig(new_filename, bbox_inches='tight', format='tiff')
     plt.close('all')
+
+
+def plot_IBI(dft, new_filename):
+    dft['IBI'] = (dft.allboutstarts.shift(-1) - dft.allboutends) / 700
+    hab = dft.groupby('Trial').get_group(0.0)
+    trials = dft.loc[dft['Trial'].isin(np.arange(1, 41, 2))]
+    breaks = dft.loc[dft['Trial'].isin(np.arange(2, 41, 2))].replace(np.nan, 0.0)
+
+    fig, ax = plt.subplots(1, 1)
+    ax = sns.distplot(hab.IBI, label='Habituation', ax=ax)
+    ax = sns.distplot(trials.IBI, label='Trials', ax=ax)
+    ax = sns.distplot(breaks.IBI, label='ITI', ax=ax)
+    ax.set_xlabel('Length of Interbout Interval (s)', fontsize=20, labelpad=20)
+    ax.set_ylabel('Frequency', fontsize=20, labelpad=20)
+    lg = ax.legend(loc=1, title='Condition', fontsize='x-large')
+    lg.get_title().set_fontsize('18')  # legend 'Title' fontsize
+    plt.tight_layout()
+    fig.savefig(new_filename, bbox_inches='tight', format='tiff')
+    plt.close('all')
+

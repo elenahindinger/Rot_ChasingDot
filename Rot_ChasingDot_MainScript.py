@@ -11,7 +11,7 @@ import itertools as it
 from Rot_ChasingDot_Functions import *
 from Rot_ChasingDot_Plots import *
 
-exp_path = r'F:\Rotations\ExperimentalData\2019_10_24\20191024_experimental_Trial1_f2_Tu_4275ix_6dpf_Atlas_75_P2_chasingdot'  # CHANGE HERE TO LOOK AT A DIFFERENT FISH
+exp_path = r'F:\Rotations\ExperimentalData\toanalyse\2019_10_24\20191024_experimental_Trial1_f1_Tu_4275ix_6dpf_Atlas_75_P2_chasingdot'  # CHANGE HERE TO LOOK AT A DIFFERENT FISH
 save_path = r'F:\Rotations\Analysis'
 
 #######################################################################################################################
@@ -40,15 +40,17 @@ camlog_og = pd.DataFrame(loadmat(camfile)['A'], columns=['Id', 'xPos', 'yPos', '
                                                       'TailAngles9', 'TailAngles10', 'FirstorNot', 'TrackEye',
                                                       'TimerAcq', 'lag'])  # read camlog
 stimlog_og = read_stimlog(stimfile, shortened=True)  # read stimlog
-camlog, stimlog = global_trimming(camlog_og, stimlog_og)  # trim before and after synch of camlog and stimlog
 boutmat = loadmat(boutfile)  # load bout mat file
 
 ''' Some transformations in camlog and stimlog '''
+camlog_st, stimlog_st = trim_start(camlog_og, stimlog_og)  # trim before and after synch of camlog and stimlog
+camlog_ed, stimlog_ed = trim_end(camlog_st, stimlog_st)
+### ADD TRIMMING END FUNCTION HERE
 setup = 'atlas' if 'atlas' in filename.lower() else 'c3po'
-stimlog = stim_shader_to_camera_space(dataframe=stimlog, setup=setup)  # transform stimlog to camera space
-stimlog = img_to_cart(dataframe=stimlog, xPos_og='xPosDotCamSpace', yPos_og='yPosDotCamSpace', xPos_new='xPosCartDot',
+stimlog_camspace = stim_shader_to_camera_space(dataframe=stimlog_ed, setup=setup)  # transform stimlog to camera space
+stimlog = img_to_cart(dataframe=stimlog_camspace, xPos_og='xPosDotCamSpace', yPos_og='yPosDotCamSpace', xPos_new='xPosCartDot',
                       yPos_new='yPosCartDot')  # from camera coordinates to cartesian
-camlog = img_to_cart(dataframe=camlog, xPos_og='xPos', yPos_og='yPos', xPos_new='xPosCart', yPos_new='yPosCart')
+camlog = img_to_cart(dataframe=camlog_ed, xPos_og='xPos', yPos_og='yPos', xPos_new='xPosCart', yPos_new='yPosCart')
 
 ''' Dealing with boutmat '''
 Bouts = return_as_df(boutmat, keys=['allboutstarts', 'allboutends', 'indRealEnds', 'rejectedBouts'])  # bout start, end, classified Y/N
@@ -110,42 +112,45 @@ plot_bouts_per_trials(bca, new_filename=os.path.join(save_path, (filename + '_bo
 ''' PLOT 5 '''
 plot_bouts_per_condition(bca, new_filename=os.path.join(save_path, (filename + '_total_bout_count.tiff')), colour_dict=colour_dict)
 
-
-
-
 ''' Interbout interval '''
-
-# May become interesting for simpler plots
-dft['IBI'] = dft.allboutstarts.shift(-1) - dft.allboutends
-ibi_stats = dft.groupby('Trial')['IBI'].describe()
-ibi_stats_all = pd.DataFrame(np.zeros(shape=(41,8)), columns=ibi_stats.columns)  # create empty dataframe with all bout categories
-ibi_stats_all.update(ibi_stats)  # map actual bouts observed onto empty dataframe, this helps with plotting
-ibi_stats_all.iloc[:, 1:] = ibi_stats_all.iloc[:, 1:] / 700  # converts from frames to seconds
-
-# normalisation
-ibi_stats_all.iloc[0 , :] = ibi_stats_all.iloc[0, :] / 600.0
-ibi_stats_all.iloc[1::2,:] = ibi_stats_all.iloc[1::2,:] / 30.0
-ibi_stats_all.iloc[2::2,:] = ibi_stats_all.iloc[2::2,:] / 120.0
-
-
-fig, ax = plt.subplots(1, 1)
-ax = sns.barplot(x='index', y="mean", data=ibi_stats_all.reset_index(), ax=ax)
-plt.xticks(np.arange(1, 41, 2), np.arange(1, 21))
-ax.set_xlabel('Trial Number', fontsize=20, labelpad=20)
-ax.set_ylabel('Mean Interbout Interval (seconds)', fontsize=20, labelpad=20)
+# # May become interesting for simpler plots
+# dft['IBI'] = dft.allboutstarts.shift(-1) - dft.allboutends
+# ibi_stats = dft.groupby('Trial')['IBI'].describe()
+# ibi_stats_all = pd.DataFrame(np.zeros(shape=(41,8)), columns=ibi_stats.columns)  # create empty dataframe with all bout categories
+# ibi_stats_all.update(ibi_stats)  # map actual bouts observed onto empty dataframe, this helps with plotting
+# ibi_stats_all.iloc[:, 1:] = ibi_stats_all.iloc[:, 1:] / 700  # converts from frames to seconds
+#
+# # normalisation
+# ibi_stats_all.iloc[0 , :] = ibi_stats_all.iloc[0, :] / 600.0
+# ibi_stats_all.iloc[1::2,:] = ibi_stats_all.iloc[1::2,:] / 30.0
+# ibi_stats_all.iloc[2::2,:] = ibi_stats_all.iloc[2::2,:] / 120.0
+#
+#
+# fig, ax = plt.subplots(1, 1)
+# ax = sns.barplot(x='index', y="mean", data=ibi_stats_all.reset_index(), ax=ax)
+# plt.xticks(np.arange(1, 41, 2), np.arange(1, 21))
+# ax.set_xlabel('Trial Number', fontsize=20, labelpad=20)
+# ax.set_ylabel('Mean Interbout Interval (seconds)', fontsize=20, labelpad=20)
 
 ''' IBI per hab, trial, break distribution plots '''
-dft['IBI'] = dft.IBI / 700
-hab = dft.groupby('Trial').get_group(0.0)
-trials = dft.loc[dft['Trial'].isin(np.arange(1, 41, 2))]
-breaks = dft.loc[dft['Trial'].isin(np.arange(2, 41, 2))]
-breaks = breaks.replace(np.nan, 0.0)
+plot_IBI(dft, new_filename=os.path.join(save_path, (filename + '_IBI.tiff')))
 
-sns.distplot(hab.IBI, bins=40, rug=True)
-sns.distplot(trials.IBI, bins=40, rug=True)
-sns.distplot(breaks.IBI, bins=40, rug=True)
+''' HEAT MAP '''
+g = exp[exp['Trial'] != 0.0].groupby('Trial')
+st, ed = [], []
+for name, group in g:
+    st.append(group.index[0])
+    ed.append(group.index[-1])
+st_trial, ed_trial = st[::2], ed[::2]
 
-plt.hist(hab.IBI, bins=40)
+
+
+
+
+
+
+
+
 
 
 

@@ -38,24 +38,24 @@ def read_stimlog(stimfile, shortened=False):
     return stimlog_df
 
 
-def global_trimming(camlog, stimlog):
+def trim_start(camlog_og, stimlog_og):
     ''' Get rid of all NaNs in datasets '''
-    camlog = camlog.dropna()
-    stimlog = stimlog.dropna(subset=['Id'])
+    camlog = camlog_og.dropna()
+    stimlog = stimlog_og.dropna(subset=['Id'])
     ''' Trim beginning to synchronise starts based on Id '''
-    stim_st_id = stimlog.loc[0, 'Id']
-    cam_st_id = camlog.loc[0, 'Id']
-    if stim_st_id >= cam_st_id:
-        # trim camlog
-        camlog = camlog[(camlog.Id == stim_st_id).idxmax():].reset_index().drop('index', axis=1)
-    else:
-        # trim stimlog
-        stimlog = stimlog[(stimlog.Id == cam_st_id).idxmax():].reset_index().drop('index', axis=1)
+    st_id = np.max([stimlog.loc[0, 'Id'], camlog.loc[0, 'Id']])
+    camlog2 = camlog[(camlog.Id == st_id).idxmax():].reset_index().drop('index', axis=1)
+    stimlog2 = stimlog[(stimlog.Id == st_id).idxmax():].reset_index().drop('index', axis=1)
+    return camlog2, stimlog2
+
+
+def trim_end(camlog_st, stimlog_st):
     ''' Trim end to synchronise ends based on Id of Stim '''
-    cam_ed_id = round(camlog.iloc[-1, 0], -1)
-    camlog = camlog[:(camlog.Id == cam_ed_id).idxmax()]
-    stimlog = stimlog[:(stimlog.Id == cam_ed_id).idxmax()]
-    return camlog, stimlog
+    stimlog_ed_temp = stimlog_st.iloc[:216000, :]
+    camlog_ed = camlog_st.iloc[:2519991, :]
+    camlog_ed_id = camlog_ed.iloc[-1, 0]+10
+    stimlog_ed = stimlog_ed_temp[:(stimlog_ed_temp.Id == camlog_ed_id).idxmax()]
+    return camlog_ed, stimlog_ed
 
 
 def return_as_df(boutmat, keys):

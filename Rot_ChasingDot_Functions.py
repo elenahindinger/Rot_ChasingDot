@@ -11,6 +11,25 @@ from scipy.io import loadmat
 from math import sqrt
 
 
+def JoaoColormap():
+    clrs = np.array([
+        [0.392156863, 0.392156863, 0.392156863],
+        [0, 0, 0],
+        [1, 0.666666667, 0],
+        [0.862745098, 0, 0.862745098],
+        [0.980392157, 0.501960784, 0.447058824],
+        [1, 0, 0.196078431],
+        [0, 0.588235294, 1],
+        [0, 0.6, 0],
+        [0, 0, 0.784313725],
+        [1, 1, 0],
+        [0.4, 1, 1],
+        [0.576470588, 0.439215686, 0.858823529],
+        [0.411764706, 1, 0.4]])
+
+    return mpl.colors.ListedColormap(clrs)
+
+
 def find_files(exp_path):
     for file in os.listdir(exp_path):
         if file.endswith('000.mat'):
@@ -46,16 +65,27 @@ def trim_start(camlog_og, stimlog_og):
     st_id = np.max([stimlog.loc[0, 'Id'], camlog.loc[0, 'Id']])
     camlog2 = camlog[(camlog.Id == st_id).idxmax():].reset_index().drop('index', axis=1)
     stimlog2 = stimlog[(stimlog.Id == st_id).idxmax():].reset_index().drop('index', axis=1)
-    return camlog2, stimlog2
+    return camlog2, stimlog2, (camlog.Id == st_id).idxmax()
+
+
+# def trim_end(camlog_st, stimlog_st):
+#     ''' OLD !!! Trim end to synchronise ends based on Id of Stim '''
+#     stimlog_ed_temp = stimlog_st.iloc[:216000, :]
+#     camlog_ed = camlog_st.iloc[:2519991, :]
+#     camlog_ed_id = camlog_ed.iloc[-1, 0]+10
+#     stimlog_ed = stimlog_ed_temp[:(stimlog_ed_temp.Id == camlog_ed_id).idxmax()]
+#     return camlog_ed, stimlog_ed
 
 
 def trim_end(camlog_st, stimlog_st):
     ''' Trim end to synchronise ends based on Id of Stim '''
     stimlog_ed_temp = stimlog_st.iloc[:216000, :]
-    camlog_ed = camlog_st.iloc[:2519991, :]
-    camlog_ed_id = camlog_ed.iloc[-1, 0]+10
-    stimlog_ed = stimlog_ed_temp[:(stimlog_ed_temp.Id == camlog_ed_id).idxmax()]
-    return camlog_ed, stimlog_ed
+    stimlog_ed_temp['diff'] = np.abs(stimlog_ed_temp['Id'].diff())  # find where dot position changes from -100 (not shown) to displayed
+    df_filtered = stimlog_ed_temp[stimlog_ed_temp['diff'] == 0.0]  # returns rows of condition changes
+    stimlog_ed_id = df_filtered.Id.unique()[-1]
+    stimlog_ed = stimlog_st[:(stimlog_st.Id == stimlog_ed_id).idxmax()]
+    camlog_ed = camlog_st[:(camlog_st.Id == stimlog_ed_id-9).idxmax()]
+    return camlog_ed, stimlog_ed, (camlog_st.Id == stimlog_ed_id-9).idxmax()
 
 
 def return_as_df(boutmat, keys):
@@ -64,6 +94,13 @@ def return_as_df(boutmat, keys):
     for key, val in dict2.items():
         dict2[key] = val.flatten()
     df = pd.DataFrame.from_dict(dict2)
+    return df
+
+
+def return_as_df_multiple(boutmat, key):
+    ''' Boutmat is the original dictionary, key contains multiple sub arrays. '''
+    dict2 = {x: boutmat[x] for x in [key]}
+    df = pd.DataFrame(dict2.get(key, ''))
     return df
 
 
@@ -102,7 +139,7 @@ def add_trial_number(df):
     trials.set_index('index', inplace=True)  # sets this as index to merge with df later
     df_trials = df.join(trials).drop(['diff'], axis=1)  # merges trial temp with dataframe
     df_trials.Trial = df_trials.Trial.fillna(method='pad')  # fills in missing conditions by forward fill
-    return df_trials
+    return df_trials, trials
 
 
 def bouts_to_camlog(dft, camlog):

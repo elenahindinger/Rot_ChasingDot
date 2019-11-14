@@ -11,7 +11,7 @@ import itertools as it
 from Rot_ChasingDot_Functions import *
 from Rot_ChasingDot_Plots import *
 
-exp_path = r'F:\Rotations\ExperimentalData\toanalyse\2019_10_24\20191024_experimental_Trial1_f1_Tu_4275ix_6dpf_Atlas_75_P2_chasingdot'  # CHANGE HERE TO LOOK AT A DIFFERENT FISH
+exp_path = r'F:\Rotations\ExperimentalData\toanalyse\2019_10_30\20191030_experimental_Trial1_f3_Tu_4783(4)_6dpf_Atlas_75_P2_chasingdot'  # CHANGE HERE TO LOOK AT A DIFFERENT FISH
 save_path = r'F:\Rotations\Analysis'
 
 #######################################################################################################################
@@ -21,9 +21,12 @@ ordered_bouts = ['AS', 'Slow1', 'Slow2', 'ShortCS', 'LongCS', 'BS', 'J-Turn', 'H
 idx = [11, 7, 9, 1, 2, 3, 5, 13, 8, 12, 4, 10, 6]
 numbers, unordered_bouts = (list(t) for t in zip(*sorted(zip(idx, ordered_bouts))))
 
-colour_dict = {'AS': 'skyblue', 'Slow1': 'royalblue', 'Slow2': 'darkblue', 'ShortCS': 'grey', 'LongCS': 'k',
-               'BS': 'orange', 'J-Turn': 'lightcoral', 'HAT': 'g', 'RT': 'darkgreen', 'SAT': 'mediumpurple',
-               'O-bend': 'mediumvioletred', 'LLC': 'yellow', 'SLC': 'red'}
+colour_dict = {'AS': [0.4, 1, 1], 'Slow1': [0, 0.588235294, 1], 'Slow2': [0, 0, 0.784313725],
+               'ShortCS': [0.392156863, 0.392156863, 0.392156863], 'LongCS': [0, 0, 0], 'BS': [1, 0.666666667, 0],
+               'J-Turn': [0.980392157, 0.501960784, 0.447058824], 'HAT': [0.411764706, 1, 0.4], 'RT': [0, 0.6, 0],
+               'SAT': [0.576470588, 0.439215686, 0.858823529], 'O-bend': [0.862745098, 0, 0.862745098],
+               'LLC': [0.4, 1, 1], 'SLC': [1, 0, 0.196078431]}
+
 
 #######################################################################################################################
 
@@ -43,9 +46,8 @@ stimlog_og = read_stimlog(stimfile, shortened=True)  # read stimlog
 boutmat = loadmat(boutfile)  # load bout mat file
 
 ''' Some transformations in camlog and stimlog '''
-camlog_st, stimlog_st = trim_start(camlog_og, stimlog_og)  # trim before and after synch of camlog and stimlog
-camlog_ed, stimlog_ed = trim_end(camlog_st, stimlog_st)
-### ADD TRIMMING END FUNCTION HERE
+camlog_st, stimlog_st, cam_st_id = trim_start(camlog_og, stimlog_og)  # trim before and after synch of camlog and stimlog
+camlog_ed, stimlog_ed, cam_ed_id = trim_end(camlog_st, stimlog_st)
 setup = 'atlas' if 'atlas' in filename.lower() else 'c3po'
 stimlog_camspace = stim_shader_to_camera_space(dataframe=stimlog_ed, setup=setup)  # transform stimlog to camera space
 stimlog = img_to_cart(dataframe=stimlog_camspace, xPos_og='xPosDotCamSpace', yPos_og='yPosDotCamSpace', xPos_new='xPosCartDot',
@@ -58,9 +60,10 @@ BoutCat = return_as_df(boutmat, keys=['boutCat'])  # bout category
 DistToCenter = return_as_df(boutmat, keys=['distToCenter'])  # distance to centre of cloud
 BodyAngles = return_as_df(boutmat, keys=['realBodyAngles'])  # body angles unwrapped
 BoutSegMeth = return_as_df(boutmat, keys=['smootherTailCurveMeasure'])  # method of bout segmentation
-# KinPar = return_as_df(boutmat, keys=['BoutKinematicParameters']) NOT DEALT WITH YET, NEXT VERSION
-# NewScore = return_as_df(boutmat, keys=['newScore']) NOT DEALT WITH YET, NEXT VERSION
-# TailAngles = return_as_df(boutmat, keys=['smoothedCumsumInterpFixedSegmentAngles']) NOT DEALT WITH YET, NEXT VERSION
+KinPar = return_as_df_multiple(boutmat, key='BoutKinematicParameters')
+NewScore = return_as_df_multiple(boutmat, key='newScore')
+TailAngles = return_as_df_multiple(boutmat, key='smoothedCumsumInterpFixedSegmentAngles')
+TailAnglesTrim = TailAngles.iloc[cam_st_id:cam_ed_id+cam_st_id, :].copy()
 
 # clean up Bouts to delete unclassified bouts
 UnclassifiedBoutIndices = Bouts[Bouts['rejectedBouts'] == 1].index  # Get indices for which column rejected Bouts is 1
@@ -71,7 +74,7 @@ Bouts = Bouts.drop(UnclassifiedBoutIndices).reset_index().drop(['rejectedBouts',
 BoutsWithCat = pd.concat([Bouts.iloc[:, :2], BoutCat], axis=1)  # merge bouts with classification
 BoutsWithCat['Id'] = BoutsWithCat.allboutstarts  # create a dummy column Id to merge with stim afterwards
 df = pd.merge(BoutsWithCat, stimlog, on='Id')  # merge BoutsWithCat with stimlog
-dft = add_trial_number(df)  # this function returns a new dataframe with trial number added, where 0 is habituation. You can do a lot of computation from this point onwards.
+dft, dft_trials = add_trial_number(df)  # this function returns a new dataframe with trial number added, where 0 is habituation. You can do a lot of computation from this point onwards.
 
 
 ''' Mapping bouts onto camlog '''
@@ -80,22 +83,16 @@ camlog['boutCat'] = tail_cat  # adds this array to camera log
 exp = camlog.merge(stimlog, on='Id', how='left')  # merge camera log and stimlog
 exp[['xPosCartDot', 'yPosCartDot']] = exp[['xPosCartDot', 'yPosCartDot']].fillna(method='ffill')  # forward fill to pad out all rows with a dot position
 exp['StopWatchTime'] = exp['StopWatchTime'].interpolate()  # interpolate time
-exp = add_trial_number(exp)  # this function returns a new dataframe with trial number added.
+exp, trials = add_trial_number(exp)  # this function returns a new dataframe with trial number added.
 
 #######################################################################################################################
 
 ''' PLOT 1 Trajectory '''
-plot_trajectory(camlog, 'xPosCart', 'yPosCart', new_filename=os.path.join(save_path, (filename + '_trajectory.tiff')))
+plot_trajectory(camlog, 'xPosCart', 'yPosCart', new_filename=os.path.join(save_path, (filename + '_1_trajectory.tiff')))
 
 ''' PLOT 2 + 3 Time Spent Moving and Distance Moved'''
-plot_time_spent_moving(exp, new_filename=os.path.join(save_path, (filename + '_TimeSpentMoving.tiff')))
-# tsm = tsm.to_frame()
-# tsm.columns = ['TimeSpentMoving']
-# tsm['TrialNum'] = np.concatenate([np.array([0]), np.repeat(np.arange(1, 21), 2)])
-# tsm['Condition'] = ['Habituation'] + list(it.chain.from_iterable(zip( ['Trial']*20, ['ITI']*20)))
-# sns.barplot(x='TrialNum', y='TimeSpentMoving', hue='Condition', data=tsm)
-
-plot_distance(exp, new_filename=os.path.join(save_path, (filename + '_Distance.tiff')))
+plot_time_spent_moving(exp, new_filename=os.path.join(save_path, (filename + '_2_TimeSpentMoving.tiff')))
+plot_distance(exp, new_filename=os.path.join(save_path, (filename + '_3_Distance.tiff')))
 
 
 ''' PLOT 4 Calculate number of bouts per category per stimulus condition '''
@@ -104,56 +101,27 @@ bca = pd.DataFrame(np.zeros(shape=(41,13)), columns=np.arange(1, 14))  # create 
 bca.update(bout_count_temp)  # map actual bouts observed onto empty dataframe, this helps with plotting
 bca.columns = unordered_bouts  # rename columns to bout type names
 bca = bca[ordered_bouts]  # reorder dataframe to plot in correct order
-# bca_norm = bca.div(bca.sum(axis=1), axis=0)*100
 
-plot_bouts_per_trials(bca, new_filename=os.path.join(save_path, (filename + '_boutfreq.tiff')), colour_dict=colour_dict)
+plot_bouts_per_trials(bca, new_filename=os.path.join(save_path, (filename + '_4_boutfreq.tiff')))
+plot_bouts_per_condition(bca, new_filename=os.path.join(save_path, (filename + '_5_total_bout_count.tiff')))
+plot_pie_bouttypes(bca, new_filename=os.path.join(save_path, (filename + '_6_pie_bouttypes.tiff')))
 
-
-''' PLOT 5 '''
-plot_bouts_per_condition(bca, new_filename=os.path.join(save_path, (filename + '_total_bout_count.tiff')), colour_dict=colour_dict)
-
-''' Interbout interval '''
-# # May become interesting for simpler plots
-# dft['IBI'] = dft.allboutstarts.shift(-1) - dft.allboutends
-# ibi_stats = dft.groupby('Trial')['IBI'].describe()
-# ibi_stats_all = pd.DataFrame(np.zeros(shape=(41,8)), columns=ibi_stats.columns)  # create empty dataframe with all bout categories
-# ibi_stats_all.update(ibi_stats)  # map actual bouts observed onto empty dataframe, this helps with plotting
-# ibi_stats_all.iloc[:, 1:] = ibi_stats_all.iloc[:, 1:] / 700  # converts from frames to seconds
-#
-# # normalisation
-# ibi_stats_all.iloc[0 , :] = ibi_stats_all.iloc[0, :] / 600.0
-# ibi_stats_all.iloc[1::2,:] = ibi_stats_all.iloc[1::2,:] / 30.0
-# ibi_stats_all.iloc[2::2,:] = ibi_stats_all.iloc[2::2,:] / 120.0
-#
-#
-# fig, ax = plt.subplots(1, 1)
-# ax = sns.barplot(x='index', y="mean", data=ibi_stats_all.reset_index(), ax=ax)
-# plt.xticks(np.arange(1, 41, 2), np.arange(1, 21))
-# ax.set_xlabel('Trial Number', fontsize=20, labelpad=20)
-# ax.set_ylabel('Mean Interbout Interval (seconds)', fontsize=20, labelpad=20)
 
 ''' IBI per hab, trial, break distribution plots '''
-plot_IBI(dft, new_filename=os.path.join(save_path, (filename + '_IBI.tiff')))
+plot_IBI(dft, new_filename=os.path.join(save_path, (filename + '_7_IBI.tiff')))
+
+''' End Tail Angle over time per fish '''
+trial_st = trials.index.to_numpy()[1::2]
+
+plot_tailangle_time(TailAnglesTrim, trial_st, new_filename=os.path.join(save_path, (filename + '_8_TailAngles.tiff')))
+
 
 ''' HEAT MAP '''
-g = exp[exp['Trial'] != 0.0].groupby('Trial')
-st, ed = [], []
-for name, group in g:
-    st.append(group.index[0])
-    ed.append(group.index[-1])
-st_trial, ed_trial = st[::2], ed[::2]
 
+cmpW = JoaoColormap()
+cmpW.set_under(color='white')
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+fig, ax = plt.subplots(20, 1)
+barprops = dict(aspect='auto', cmap=cmpW, interpolation='nearest', norm=norm)
+for i in np.arange(20):
+    ax[i].imshow(exp.iloc[trial_st[i]-7000:trial_st[i]+35000, 38].values.reshape((1, -1)), **barprops)

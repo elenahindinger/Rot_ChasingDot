@@ -16,12 +16,12 @@ from Rot_ChasingDot_Plots import *
 ordered_bouts = ['AS', 'Slow1', 'Slow2', 'ShortCS', 'LongCS', 'BS', 'J-Turn', 'HAT', 'RT', 'SAT', 'O-bend', 'LLC', 'SLC']
 idx = [11, 7, 9, 1, 2, 3, 5, 13, 8, 12, 4, 10, 6]
 numbers, unordered_bouts = (list(t) for t in zip(*sorted(zip(idx, ordered_bouts))))
-
+cmpW = JoaoColormap()
 colour_dict = {'AS': [0.4, 1, 1], 'Slow1': [0, 0.588235294, 1], 'Slow2': [0, 0, 0.784313725],
                'ShortCS': [0.392156863, 0.392156863, 0.392156863], 'LongCS': [0, 0, 0], 'BS': [1, 0.666666667, 0],
                'J-Turn': [0.980392157, 0.501960784, 0.447058824], 'HAT': [0.411764706, 1, 0.4], 'RT': [0, 0.6, 0],
                'SAT': [0.576470588, 0.439215686, 0.858823529], 'O-bend': [0.862745098, 0, 0.862745098],
-               'LLC': [0.4, 1, 1], 'SLC': [1, 0, 0.196078431]}
+               'LLC': [1, 1, 0], 'SLC': [1, 0, 0.196078431]}
 
 
 #######################################################################################################################
@@ -39,7 +39,8 @@ for date_folder in os.listdir(big_folder):
 
         ''' Reading files '''
         print('Reading files...')
-        camfile, stimfile, boutfile, filename = find_files(exp_path=exp_path)  # finds correct file names based on experiment folder given above
+        camfile, stimfile, boutfile, filename = find_files(
+            exp_path=exp_path)  # finds correct file names based on experiment folder given above
         camlog_og = pd.DataFrame(loadmat(camfile)['A'],
                                  columns=['Id', 'xPos', 'yPos', 'xBodyVector', 'yBodyVector', 'BodyAngle',
                                           'MaxValue', 'BlobValue', 'midEyeX', 'midEyeY', 'hour', 'minute',
@@ -54,8 +55,13 @@ for date_folder in os.listdir(big_folder):
         boutmat = loadmat(boutfile)  # load bout mat file
 
         ''' Some transformations in camlog and stimlog '''
-        camlog_st, stimlog_st, cam_st_id = trim_start(camlog_og, stimlog_og)  # trim before and after synch of camlog and stimlog
+        # camlog_renum, stimlog_renum = camlog_og.copy(), stimlog_og.copy()
+        # camlog_renum.Id = camlog_renum.Id - camlog_og.loc[0, 'Id']
+        # stimlog_renum.Id = stimlog_renum.Id - camlog_og.loc[0, 'Id']
+        camlog_st, stimlog_st, cam_st_id = trim_start(camlog_og,
+                                                      stimlog_og)  # trim before and after synch of camlog and stimlog
         camlog_ed, stimlog_ed, cam_ed_id = trim_end(camlog_st, stimlog_st)
+        stimlog_ed['StopWatchTime'] = stimlog_ed['StopWatchTime'] - stimlog_ed.loc[0, 'StopWatchTime']
         setup = 'atlas' if 'atlas' in filename.lower() else 'c3po'
         stimlog_camspace = stim_shader_to_camera_space(dataframe=stimlog_ed,
                                                        setup=setup)  # transform stimlog to camera space
@@ -78,25 +84,33 @@ for date_folder in os.listdir(big_folder):
         TailAnglesTrim = TailAngles.iloc[cam_st_id:cam_ed_id + cam_st_id, :].copy()
 
         # clean up Bouts to delete unclassified bouts
-        UnclassifiedBoutIndices = Bouts[Bouts['rejectedBouts'] == 1].index  # Get indices for which column rejected Bouts is 1
+        UnclassifiedBoutIndices = Bouts[
+            Bouts['rejectedBouts'] == 1].index  # Get indices for which column rejected Bouts is 1
         Bouts = Bouts.drop(UnclassifiedBoutIndices).reset_index().drop(['rejectedBouts', 'index'],
                                                                        axis=1)  # Delete these rows
+        Bouts_NewId = Bouts + camlog_og.loc[0, 'Id']
 
         ''' Merge bout start, bout end, bout type with stimulus '''
-        BoutsWithCat = pd.concat([Bouts.iloc[:, :2], BoutCat], axis=1)  # merge bouts with classification
-        BoutsWithCat['Id'] = BoutsWithCat.allboutstarts  # create a dummy column Id to merge with stim afterwards
-        df = pd.merge(BoutsWithCat, stimlog, on='Id')  # merge BoutsWithCat with stimlog
-        dft, trials_dft = add_trial_number(df)  # this function returns a new dataframe with trial number added, where 0 is habituation. You can do a lot of computation from this point onwards.
+        BoutsWithCat = pd.concat([Bouts_NewId.iloc[:, :2], BoutCat], axis=1)  # merge bouts with classification
+        BoutsWithCat['Id'] = BoutsWithCat.allboutstarts.round(
+            -1)  # create a dummy column Id to merge with stim afterwards
+        # BoutsWithCat_temp = BoutsWithCat.copy()
+        # # BoutsWithCat_temp['allboutstarts'] = BoutsWithCat_temp.allboutstarts.round(-1)
+        # # BoutsWithCat_temp['allboutends'] = BoutsWithCat_temp.allboutends.round(-1)
+        # BoutsWithCat_temp['Id'] = BoutsWithCat_temp.Id.round(-1)
+        stimlog_t, stt = add_trial_number(stimlog)
+        df = pd.merge(BoutsWithCat, stimlog_t, on='Id')  # merge BoutsWithCat with stimlog
 
         ''' Mapping bouts onto camlog '''
-        tail_cat = bouts_to_camlog(dft, camlog)  # creates an array of bouts that is true for time and duration
-        camlog['boutCat'] = tail_cat  # adds this array to camera log
+        camlog['boutCat'] = bouts_to_camlog(df,
+                                            camlog)  # creates an array of bouts that is true for time and duration, adds this array to camera log
         exp = camlog.merge(stimlog, on='Id', how='left')  # merge camera log and stimlog
         exp[['xPosCartDot', 'yPosCartDot']] = exp[['xPosCartDot', 'yPosCartDot']].fillna(
             method='ffill')  # forward fill to pad out all rows with a dot position
         exp['StopWatchTime'] = exp['StopWatchTime'].interpolate()  # interpolate time
         exp, trials = add_trial_number(exp)  # this function returns a new dataframe with trial number added.
-
+        exp.to_csv(os.path.join(save_path, (filename + '_EXP.csv')), index=False)
+        trials.to_csv(os.path.join(save_path, (filename + '_trials.csv')), index=False)
         #######################################################################################################################
 
         ''' PLOT 1 Trajectory '''
@@ -105,11 +119,11 @@ for date_folder in os.listdir(big_folder):
 
         ''' PLOT 2 + 3 Time Spent Moving and Distance Moved'''
         plot_time_spent_moving(exp, new_filename=os.path.join(save_path, (filename + '_2_TimeSpentMoving.tiff')))
-        plot_distance(exp, new_filename=os.path.join(save_path, (filename + '_3_Distance.tiff')))
+        #plot_distance(exp, new_filename=os.path.join(save_path, (filename + '_3_Distance.tiff')))
 
         ''' PLOT 4 Calculate number of bouts per category per stimulus condition '''
-        bout_count_temp = dft.groupby('Trial')['boutCat'].value_counts().unstack().fillna(0).rename_axis(index=None,
-                                                                                                         columns=None)
+        bout_count_temp = df.groupby('Trial')['boutCat'].value_counts().unstack().fillna(0).rename_axis(index=None,
+                                                                                                        columns=None)
         bca = pd.DataFrame(np.zeros(shape=(41, 13)),
                            columns=np.arange(1, 14))  # create empty dataframe with all bout categories
         bca.update(bout_count_temp)  # map actual bouts observed onto empty dataframe, this helps with plotting
@@ -121,9 +135,14 @@ for date_folder in os.listdir(big_folder):
         plot_pie_bouttypes(bca, new_filename=os.path.join(save_path, (filename + '_6_pie_bouttypes.tiff')))
 
         ''' IBI per hab, trial, break distribution plots '''
-        plot_IBI(dft, new_filename=os.path.join(save_path, (filename + '_7_IBI.tiff')))
+        plot_IBI(df, new_filename=os.path.join(save_path, (filename + '_7_IBI.tiff')))
 
         ''' End Tail Angle over time per fish '''
         trial_st = trials.index.to_numpy()[1::2]
 
-        plot_tailangle_time(TailAnglesTrim, trial_st, new_filename=os.path.join(save_path, (filename + '_8_TailAngles.tiff')))
+        plot_tailangle_time_new(TailAnglesTrim, trial_st,
+                                new_filename=os.path.join(save_path, (filename + '_8_TailAngles_NEW.tiff')))
+
+        ''' HEAT MAP '''
+        exp.boutCat = exp.boutCat.replace(-1, np.nan)
+        plot_boutmap(exp, trial_st, cmpW, new_filename=os.path.join(save_path, (filename + '_9_BoutMap.tiff')))

@@ -13,19 +13,19 @@ from math import sqrt
 
 def JoaoColormap():
     clrs = np.array([
-        [0.392156863, 0.392156863, 0.392156863],
-        [0, 0, 0],
-        [1, 0.666666667, 0],
-        [0.862745098, 0, 0.862745098],
-        [0.980392157, 0.501960784, 0.447058824],
-        [1, 0, 0.196078431],
-        [0, 0.588235294, 1],
-        [0, 0.6, 0],
-        [0, 0, 0.784313725],
-        [1, 1, 0],
-        [0.4, 1, 1],
-        [0.576470588, 0.439215686, 0.858823529],
-        [0.411764706, 1, 0.4]])
+        [0.392156863, 0.392156863, 0.392156863],  #1
+        [0, 0, 0], #2
+        [1, 0.666666667, 0], #3
+        [0.862745098, 0, 0.862745098], #4
+        [0.980392157, 0.501960784, 0.447058824], #5
+        [1, 0, 0.196078431], #6
+        [0, 0.588235294, 1], #7
+        [0, 0.6, 0], #8
+        [0, 0, 0.784313725], #9
+        [1, 1, 0], #10
+        [0.4, 1, 1], #11
+        [0.576470588, 0.439215686, 0.858823529], #12
+        [0.411764706, 1, 0.4]]) #13
 
     return mpl.colors.ListedColormap(clrs)
 
@@ -63,8 +63,8 @@ def trim_start(camlog_og, stimlog_og):
     stimlog = stimlog_og.dropna(subset=['Id'])
     ''' Trim beginning to synchronise starts based on Id '''
     st_id = np.max([stimlog.loc[0, 'Id'], camlog.loc[0, 'Id']])
-    camlog2 = camlog[(camlog.Id == st_id).idxmax():].reset_index().drop('index', axis=1)
-    stimlog2 = stimlog[(stimlog.Id == st_id).idxmax():].reset_index().drop('index', axis=1)
+    camlog2 = camlog[(camlog.Id == st_id).idxmax():].reset_index().drop('index', axis=1).copy()
+    stimlog2 = stimlog[(stimlog.Id == st_id).idxmax():].reset_index().drop('index', axis=1).copy()
     return camlog2, stimlog2, (camlog.Id == st_id).idxmax()
 
 
@@ -79,12 +79,12 @@ def trim_start(camlog_og, stimlog_og):
 
 def trim_end(camlog_st, stimlog_st):
     ''' Trim end to synchronise ends based on Id of Stim '''
-    stimlog_ed_temp = stimlog_st.iloc[:216000, :]
+    stimlog_ed_temp = stimlog_st.iloc[:216000, :].copy()
     stimlog_ed_temp['diff'] = np.abs(stimlog_ed_temp['Id'].diff())  # find where dot position changes from -100 (not shown) to displayed
     df_filtered = stimlog_ed_temp[stimlog_ed_temp['diff'] == 0.0]  # returns rows of condition changes
     stimlog_ed_id = df_filtered.Id.unique()[-1]
-    stimlog_ed = stimlog_st[:(stimlog_st.Id == stimlog_ed_id).idxmax()]
-    camlog_ed = camlog_st[:(camlog_st.Id == stimlog_ed_id-9).idxmax()]
+    stimlog_ed = stimlog_st[:(stimlog_st.Id == stimlog_ed_id).idxmax()].copy()
+    camlog_ed = camlog_st[:(camlog_st.Id == stimlog_ed_id-9).idxmax()].copy()
     return camlog_ed, stimlog_ed, (camlog_st.Id == stimlog_ed_id-9).idxmax()
 
 
@@ -132,23 +132,24 @@ def stim_shader_to_camera_space(dataframe, setup):
 
 
 def add_trial_number(df):
-    df['diff'] = np.abs(df['xPosCartDot'].diff())  # find where dot position changes from -100 (not shown) to displayed
-    df_filtered = df[df['diff'] > 10000.0]  # returns rows of condition changes
+    df_temp = df.copy()
+    df_temp['diff'] = np.abs(df_temp['xPosCartDot'].diff())  # find where dot position changes from -100 (not shown) to displayed
+    df_filtered = df_temp[df_temp['diff'] > 10000.0]  # returns rows of condition changes
     trials = pd.DataFrame(np.concatenate((np.array([0]), df_filtered.index.values)), columns=['index'])  # creates temp dataframe with indices of condition changes
     trials['Trial'] = np.arange(len(trials))  # adds column with trial number
     trials.set_index('index', inplace=True)  # sets this as index to merge with df later
-    df_trials = df.join(trials).drop(['diff'], axis=1)  # merges trial temp with dataframe
+    df_trials = df.join(trials)  # merges trial temp with dataframe
     df_trials.Trial = df_trials.Trial.fillna(method='pad')  # fills in missing conditions by forward fill
     return df_trials, trials
 
 
-def bouts_to_camlog(dft, camlog):
-    ''' Returns an array containing bout types true with time that can then be added to camlog '''
-    id_st = dft['allboutstarts'].values - int(camlog.iloc[0, 0])
-    id_ed = dft['allboutends'].values - int(camlog.iloc[0, 0])
+def bouts_to_camlog(df, camlog):
+    ''' Returns an array containing bout types true with time that can then be added to camlog. '''
+    id_st = df['allboutstarts'].values.astype(int) - int(camlog.loc[0, 'Id'])
+    id_ed = df['allboutends'].values.astype(int) - int(camlog.loc[0, 'Id'])
     tail_cat = np.zeros(camlog.shape[0]) - 1
     for i, val in enumerate(id_st):
-        tail_cat[id_st[i]:id_ed[i]] = dft['boutCat'][i]
+        tail_cat[id_st[i]:id_ed[i]] = df['boutCat'][i]
     return tail_cat
 
 
@@ -165,4 +166,16 @@ def distance(df, px_per_mm=75):
     dist_mm = dist_px * px_per_mm / 1000
     return dist_mm
 
+
+def my_autopct(pct):
+    return ('%1.0f%%' % pct) if pct >= 3 else ''
+
+
+def fix_BodyAngle(df):
+    ''' Calculates body angle. '''
+    # original values range from 0 to 3/2pi and 0 to -pi/2, the following line converts every angle from 0-2pi
+    df['BodyAngleCont'] = df.BodyAngle.apply(lambda x: (2 * np.pi - np.abs(x)) if (-np.pi / 2) < x < 0 else x)
+    # need to unwrap angles as we care about relative angular change, not absolute angle
+    df['BodyAngleUnwrap'] = np.unwrap(df.BodyAngleCont, discont=0)
+    return df['BodyAngleUnwrap'].values
 

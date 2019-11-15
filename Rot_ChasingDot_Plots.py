@@ -16,12 +16,12 @@ from Rot_ChasingDot_Functions import *
 ordered_bouts = ['AS', 'Slow1', 'Slow2', 'ShortCS', 'LongCS', 'BS', 'J-Turn', 'HAT', 'RT', 'SAT', 'O-bend', 'LLC', 'SLC']
 idx = [11, 7, 9, 1, 2, 3, 5, 13, 8, 12, 4, 10, 6]
 numbers, unordered_bouts = (list(t) for t in zip(*sorted(zip(idx, ordered_bouts))))
-
+cmpW = JoaoColormap()
 colour_dict = {'AS': [0.4, 1, 1], 'Slow1': [0, 0.588235294, 1], 'Slow2': [0, 0, 0.784313725],
                'ShortCS': [0.392156863, 0.392156863, 0.392156863], 'LongCS': [0, 0, 0], 'BS': [1, 0.666666667, 0],
                'J-Turn': [0.980392157, 0.501960784, 0.447058824], 'HAT': [0.411764706, 1, 0.4], 'RT': [0, 0.6, 0],
                'SAT': [0.576470588, 0.439215686, 0.858823529], 'O-bend': [0.862745098, 0, 0.862745098],
-               'LLC': [0.4, 1, 1], 'SLC': [1, 0, 0.196078431]}
+               'LLC': [1, 1, 0], 'SLC': [1, 0, 0.196078431]}
 
 
 def plot_trajectory(df, xPos, yPos, new_filename):
@@ -120,9 +120,6 @@ def plot_pie_bouttypes(bca, new_filename):
     cmp = JoaoColormap()
     gs = GridSpec(2, 3)  # 2 rows, 3 columns
 
-    def my_autopct(pct):
-        return ('%1.0f%%' % pct) if pct > 4 else ''
-
     for i in np.arange(3):
         ax = plt.subplot2grid((2, 3), (0, i))
         dfs[i].plot(kind='pie', colors=[colour_dict.get(x, 'white') for x in dfs[i].index], ax=ax,
@@ -163,18 +160,61 @@ def plot_IBI(dft, new_filename):
     plt.close('all')
 
 
-def plot_tailangle_time(TailAngles, trial_st, new_filename):
-    fig, ax = plt.subplots(1, 1, figsize=(15, 10))
-    sns.despine()
-    colors = plt.cm.viridis(np.linspace(0,1,20))
-    for i in np.arange(20):
-        ax.plot(np.arange(42000), TailAngles.iloc[trial_st[i]-7000:trial_st[i]+35000,9]+i*6, c=colors[i], linewidth=0.75)
-    plt.axvline(x=7000, color='r', linestyle='--')
-    plt.axvline(x=28000, color='r', linestyle='--')
+def plot_tailangle_time_new(TailAngles, trial_st, new_filename):
+    fig, ax = plt.subplots(22, 1, sharex=True, sharey=True, figsize=(15, 10))
+    sns.despine(left=True)
+    colors = plt.cm.viridis(np.linspace(0, 1, 20))
+    # Baseline
+    x = np.arange(42000)
+    yb = TailAngles.iloc[int(trial_st[0]/2)-7000:int(trial_st[0]/2)+35000, 9].values
+    ax[0].plot(x, yb, c='k', linewidth=0.75)
+    ax[0].annotate(xy=(x[0], yb[0]), xytext=(-50.0, 0), textcoords='offset points', s=('Baseline'), va='center')
+    ax[0].axis('off')
+    # Empty second
+    ax[1].axis('off')
+    # Traces trials 1 - 20
+    for i in np.arange(2, 22):
+        y = TailAngles.iloc[trial_st[i-2]-7000:trial_st[i-2]+35000, 9].values
+        ax[i].plot(x, y, c=colors[i-2], linewidth=0.75)
+        ax[i].axvline(x=7000, color='r', linestyle='--')
+        ax[i].axvline(x=28000, color='r', linestyle='--')
+        ax[i].annotate(xy=(x[0], y[0]), xytext=(-50.0, 0), textcoords='offset points', s=('Trial %s' % str(i-1)),
+                       va='center')
+        if i != 21:
+            ax[i].axis('off')
+    ax[21].spines['bottom'].set_bounds(0, 42000)
     plt.xticks(np.arange(0, 42000, 3500), np.arange(-10, 50, 5))
-    plt.yticks(np.arange(0, 120, 6), ['Trial 1', 'Trial 2', 'Trial 3', 'Trial 4', 'Trial 5', 'Trial 6', 'Trial 7',
-                                      'Trial 8', 'Trial 9', 'Trial 10', 'Trial 11', 'Trial 12', 'Trial 13', 'Trial 14',
-                                      'Trial 15', 'Trial 16', 'Trial 17', 'Trial 18', 'Trial 19', 'Trial 20'])
-    plt.tight_layout()
+    plt.yticks([])
+    plt.subplots_adjust(hspace=0.02)
+    fig.savefig(new_filename, bbox_inches='tight', format='tiff')
+    plt.close('all')
+
+
+def plot_boutmap(exp, trial_st, cmpW, new_filename):
+    fig, ax = plt.subplots(22, 1, figsize=(15, 10))
+    # Baseline
+    ax[0].imshow(exp.iloc[int(trial_st[0]/2)-7000:int(trial_st[0]/2)+35000, 38].values.reshape((1, -1)), cmap=cmpW,
+                 aspect='auto', vmin=1, vmax=13)
+    sns.despine(bottom=True, ax=ax[0])
+    ax[0].set_yticks(np.arange(1))
+    ax[0].set_yticklabels(['Baseline'])
+    # Empty second
+    ax[1].axis('off')
+    # Traces trials 1 - 20
+    for i in np.arange(2, 22):
+        ax[i].imshow(exp.iloc[trial_st[i-2]-7000:trial_st[i-2]+35000, 38].values.reshape((1, -1)), cmap=cmpW,
+                     aspect='auto', vmin=1, vmax=13)
+        ax[i].axvline(x=7000, color='r', linestyle='--')
+        ax[i].axvline(x=28000, color='r', linestyle='--')
+        ax[i].set_yticks(np.arange(1))
+        ax[i].set_yticklabels(['Trial %s' % int(i-1)])
+        if i != 21:
+            sns.despine(bottom=True, top=True, right=True, ax=ax[i])
+    plt.setp(ax[:21], xticks=[])  # turn off x ticks for all except bottom plot
+    # Extras for bottom
+    sns.despine(right=True, top=True, ax=ax[21])
+    ax[21].spines['bottom'].set_bounds(0, 42000)
+    plt.xticks(np.arange(0, 42000, 3500), np.arange(-10, 50, 5))
+    plt.subplots_adjust(hspace=0.2)
     fig.savefig(new_filename, bbox_inches='tight', format='tiff')
     plt.close('all')

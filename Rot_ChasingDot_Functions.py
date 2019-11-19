@@ -175,8 +175,6 @@ def fix_BodyAngle(df):
     ''' Calculates body angle. '''
     # original values range from 0 to 3/2pi and 0 to -pi/2, the following line converts every angle from 0-2pi
     df['BodyAngleCont'] = df.BodyAngle.apply(lambda x: (2 * np.pi - np.abs(x)) if (-np.pi / 2) < x < 0 else x)
-    # need to unwrap angles as we care about relative angular change, not absolute angle
-    df['BodyAngleUnwrap'] = np.unwrap(df.BodyAngleCont, discont=0)
     return df['BodyAngleUnwrap'].values
 
 

@@ -11,7 +11,7 @@ import itertools as it
 from Rot_ChasingDot_Functions import *
 from Rot_ChasingDot_Plots import *
 
-exp_path = r'F:\Rotations\ExperimentalData\toanalyse\2019_10_25\20191025_experimental_Trial1_f3_Tu_4275ix_7dpf_Atlas_75_P2_chasingdot'  # CHANGE HERE TO LOOK AT A DIFFERENT FISH
+exp_path = r'F:\Rotations\ExperimentalData\toanalyse\2019_10_30\20191030_experimental_Trial1_f2_Tu_4783(4)_6dpf_C3PO_75_P2_chasingdot'  # CHANGE HERE TO LOOK AT A DIFFERENT FISH
 save_path = r'F:\Rotations\Analysis'
 
 #######################################################################################################################
@@ -132,5 +132,5 @@ plot_boutmap(exp, trial_st, cmpW, new_filename=os.path.join(save_path, (filename
 
 ''' Dot - fish distance response '''
 tr = exp.loc[exp['Trial'].isin(np.arange(1, 41, 2))].copy()
-tr['BodyAngle'] = fix_BodyAngle(tr)
+tr['BodyAngleCont'] = tr.BodyAngle.apply(lambda x: (2 * np.pi - np.abs(x)) if (-np.pi / 2) < x < 0 else x)
 

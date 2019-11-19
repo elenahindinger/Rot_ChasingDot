@@ -11,8 +11,8 @@ import itertools as it
 from Rot_ChasingDot_Functions import *
 from Rot_ChasingDot_Plots import *
 
-exp_path = r'F:\Rotations\ExperimentalData\toanalyse\2019_10_30\20191030_experimental_Trial1_f3_Tu_4783(4)_6dpf_Atlas_75_P2_chasingdot'  # CHANGE HERE TO LOOK AT A DIFFERENT FISH
-save_path = r'F:\Rotations\Analysis\new'
+exp_path = r'F:\Rotations\ExperimentalData\toanalyse\2019_10_25\20191025_experimental_Trial1_f3_Tu_4275ix_7dpf_Atlas_75_P2_chasingdot'  # CHANGE HERE TO LOOK AT A DIFFERENT FISH
+save_path = r'F:\Rotations\Analysis'
 
 #######################################################################################################################
 
@@ -95,6 +95,8 @@ exp, trials = add_trial_number(exp)  # this function returns a new dataframe wit
 
 ''' PLOT 1 Trajectory '''
 plot_trajectory(camlog, 'xPosCart', 'yPosCart', new_filename=os.path.join(save_path, (filename + '_1_trajectory.tiff')))
+plot_trajectory_split(exp, new_filename=os.path.join(save_path, (filename + '_1_1_trajectory_split.tiff')))
+
 
 ''' PLOT 2 + 3 Time Spent Moving and Distance Moved'''
 plot_time_spent_moving(exp, new_filename=os.path.join(save_path, (filename + '_2_TimeSpentMoving.tiff')))
@@ -120,7 +122,7 @@ plot_IBI(df, new_filename=os.path.join(save_path, (filename + '_7_IBI.tiff')))
 ''' End Tail Angle over time per fish '''
 trial_st = trials.index.to_numpy()[1::2]
 
-plot_tailangle_time_new(TailAnglesTrim, trial_st, new_filename=os.path.join(save_path, (filename + '_8_TailAngles_NEW.tiff')))
+plot_tailangle_time(TailAnglesTrim, trial_st, new_filename=os.path.join(save_path, (filename + '_8_TailAngles.tiff')))
 
 
 ''' HEAT MAP '''

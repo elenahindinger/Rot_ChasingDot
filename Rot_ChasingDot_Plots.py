@@ -8,6 +8,7 @@ import matplotlib as mpl
 import seaborn as sns
 import itertools as it
 from scipy.io import loadmat
+from matplotlib.lines import Line2D
 from matplotlib.gridspec import GridSpec
 from Rot_ChasingDot_Functions import *
 
@@ -28,8 +29,31 @@ def plot_trajectory(df, xPos, yPos, new_filename):
     print('Plotting trajectory...')
     mpl.rcParams['agg.path.chunksize'] = 10000
     fig, axes = plt.subplots(1, 1, figsize=(10, 10))
-    axes.plot(df[xPos], df[yPos])
+    axes.plot(df[xPos], df[yPos], color='k')
     axes.set(xlim=(0, 950), ylim=(0, 950))
+    plt.tight_layout()
+    fig.savefig(new_filename, bbox_inches='tight', format='tiff')
+    plt.close('all')
+
+
+def plot_trajectory_split(exp, new_filename):
+    g = exp.groupby('Trial')
+    fig, axes = plt.subplots(1, 1, figsize=(10, 10))
+    counter = 0
+    custom_lines = [Line2D([0], [0], color='k', lw=3),
+                    Line2D([0], [0], color='firebrick', lw=3),
+                    Line2D([0], [0], color='darkorange', lw=3)]
+    for name, group in g:
+        if name == 0:
+            axes.plot(group['xPosCart'], group['yPosCart'], c='k', label='Baseline')
+        elif name % 2 != 0:
+            axes.plot(group['xPosCart'], group['yPosCart'], c='firebrick', label='Trial')  # trials
+            counter += 1
+        else:
+            axes.plot(group['xPosCart'], group['yPosCart'], c='darkorange', alpha=0.3, label='Intertrial Interval')  # intertrial intervals
+            counter += 1
+    axes.set(xlim=(0, 950), ylim=(0, 950))
+    lg = axes.legend(custom_lines, ['Baseline', 'Trial', 'Intertrial Interval'], loc=1, fontsize='x-large')
     plt.tight_layout()
     fig.savefig(new_filename, bbox_inches='tight', format='tiff')
     plt.close('all')
@@ -141,11 +165,11 @@ def plot_pie_bouttypes(bca, new_filename):
     plt.close('all')
 
 
-def plot_IBI(dft, new_filename):
-    dft['IBI'] = (dft.allboutstarts.shift(-1) - dft.allboutends) / 700
-    hab = dft.groupby('Trial').get_group(0.0).replace(np.nan, 0.0)
-    trials = dft.loc[dft['Trial'].isin(np.arange(1, 41, 2))].replace(np.nan, 0.0)
-    breaks = dft.loc[dft['Trial'].isin(np.arange(2, 41, 2))].replace(np.nan, 0.0)
+def plot_IBI(df, new_filename):
+    df['IBI'] = (df.allboutstarts.shift(-1) - df.allboutends) / 700
+    hab = df.groupby('Trial').get_group(0.0).replace(np.nan, 0.0)
+    trials = df.loc[df['Trial'].isin(np.arange(1, 41, 2))].replace(np.nan, 0.0)
+    breaks = df.loc[df['Trial'].isin(np.arange(2, 41, 2))].replace(np.nan, 0.0)
 
     fig, ax = plt.subplots(1, 1)
     ax = sns.distplot(hab.IBI, label='Habituation', ax=ax)
@@ -160,7 +184,7 @@ def plot_IBI(dft, new_filename):
     plt.close('all')
 
 
-def plot_tailangle_time_new(TailAngles, trial_st, new_filename):
+def plot_tailangle_time(TailAngles, trial_st, new_filename):
     fig, ax = plt.subplots(22, 1, sharex=True, sharey=True, figsize=(15, 10))
     sns.despine(left=True)
     colors = plt.cm.viridis(np.linspace(0, 1, 20))
@@ -185,36 +209,55 @@ def plot_tailangle_time_new(TailAngles, trial_st, new_filename):
     ax[21].spines['bottom'].set_bounds(0, 42000)
     plt.xticks(np.arange(0, 42000, 3500), np.arange(-10, 50, 5))
     plt.yticks([])
+    plt.xlabel('Time (seconds)', fontsize=14, labelpad=10)
     plt.subplots_adjust(hspace=0.02)
     fig.savefig(new_filename, bbox_inches='tight', format='tiff')
     plt.close('all')
 
 
 def plot_boutmap(exp, trial_st, cmpW, new_filename):
-    fig, ax = plt.subplots(22, 1, figsize=(15, 10))
+    fig = plt.figure(figsize=(15, 10))
+    gs = GridSpec(22, 5)  # 22 rows, 2 columns
     # Baseline
-    ax[0].imshow(exp.iloc[int(trial_st[0]/2)-7000:int(trial_st[0]/2)+35000, 38].values.reshape((1, -1)), cmap=cmpW,
+    ax0 = plt.subplot2grid((22, 5), (0, 0), colspan=4)
+    ax0.imshow(exp.iloc[int(trial_st[0]/2)-7000:int(trial_st[0]/2)+35000, 38].values.reshape((1, -1)), cmap=cmpW,
                  aspect='auto', vmin=1, vmax=13)
-    sns.despine(bottom=True, ax=ax[0])
-    ax[0].set_yticks(np.arange(1))
-    ax[0].set_yticklabels(['Baseline'])
+    sns.despine(bottom=True, ax=ax0)
+    ax0.set_xticks([])
+    ax0.set_yticks(np.arange(1))
+    ax0.set_yticklabels(['Baseline'])
     # Empty second
-    ax[1].axis('off')
+    ax1 = plt.subplot2grid((22, 5), (1, 0), colspan=4)
+    ax1.axis('off')
     # Traces trials 1 - 20
     for i in np.arange(2, 22):
-        ax[i].imshow(exp.iloc[trial_st[i-2]-7000:trial_st[i-2]+35000, 38].values.reshape((1, -1)), cmap=cmpW,
-                     aspect='auto', vmin=1, vmax=13)
-        ax[i].axvline(x=7000, color='r', linestyle='--')
-        ax[i].axvline(x=28000, color='r', linestyle='--')
-        ax[i].set_yticks(np.arange(1))
-        ax[i].set_yticklabels(['Trial %s' % int(i-1)])
-        if i != 21:
-            sns.despine(bottom=True, top=True, right=True, ax=ax[i])
-    plt.setp(ax[:21], xticks=[])  # turn off x ticks for all except bottom plot
-    # Extras for bottom
-    sns.despine(right=True, top=True, ax=ax[21])
-    ax[21].spines['bottom'].set_bounds(0, 42000)
+        ax = plt.subplot2grid((22, 5), (i, 0), colspan=4)
+        ax.imshow(exp.iloc[trial_st[i-2]-7000:trial_st[i-2]+35000, 38].values.reshape((1, -1)), cmap=cmpW,
+                  aspect='auto', vmin=1, vmax=13)
+        ax.axvline(x=7000, color='crimson', linestyle='--')
+        ax.axvline(x=28000, color='crimson', linestyle='--')
+        ax.axvspan(xmin=7000, xmax=28000, color='crimson', alpha=0.1)
+        ax.set_xticks([])
+        ax.set_yticks(np.arange(1))
+        ax.set_yticklabels(['Trial %s' % int(i-1)])
+        if i == 21:
+            sns.despine(right=True, top=True, ax=ax)
+            ax.spines['bottom'].set_bounds(0, 42000)
+        else:
+            sns.despine(bottom=True, top=True, right=True, ax=ax)
     plt.xticks(np.arange(0, 42000, 3500), np.arange(-10, 50, 5))
-    plt.subplots_adjust(hspace=0.2)
+    plt.xlabel('Time (seconds)', fontsize=14, labelpad=10)
+    # Legend
+    axlg = plt.subplot2grid((22, 5), (0, 4), rowspan=22)
+    for i in np.arange(13):
+        tmp_str = ordered_bouts[i]
+        axlg.scatter(0.2, i/13+0.04, color=cmpW(idx[i] - 1), s=200)
+        axlg.text(0.3, i/13+0.05, tmp_str)
+    axlg.set_xlim([0, 0.5])
+    axlg.set_ylim([1, 0])
+    axlg.axis('off')
+    gs.update(wspace=0., hspace=0.2)
+    # saving figure
     fig.savefig(new_filename, bbox_inches='tight', format='tiff')
     plt.close('all')
+

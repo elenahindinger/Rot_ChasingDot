@@ -51,7 +51,7 @@ def read_stimlog(stimfile, shortened=False):
         n.append(stimlog_dict[0][0][2][0][i][0][0][1].flatten())  # we need to find the arrays that correspond to the actual values, flatten them, add them to a list
     stimlog_df = pd.DataFrame(n).T  # creates dataframe from our list of values, transposes it
     stimlog_df.columns = np.concatenate(stimlog_dict[0][0][1][0]).tolist()  # take array of variable names and assign it to dataframe columns
-    stimlog_df.rename(columns={'frameID' : 'Id', 'xPos' : 'xPosDot', 'yPos' : 'yPosDot'}, inplace=True)  # rename columns to prep for merging
+    stimlog_df.rename(columns={'frameID': 'Id', 'xPos': 'xPosDot', 'yPos': 'yPosDot'}, inplace=True)  # rename columns to prep for merging
     if shortened == True:
         stimlog_df = stimlog_df.drop(['iGlobalTime', 'iTimeDelta'], axis=1)  # we don't need these columns anymore
     return stimlog_df
